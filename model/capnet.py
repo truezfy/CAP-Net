@@ -208,15 +208,6 @@ class SingleLayerTokenExtractor:
         self.spatial_sort_indices = sort_indices
         return self.spatial_sort_indices
 
-    # def _apply_spatial_sorting(self):
-    #     """Sort token info by spatial coordinates to ensure neighborhood relationships match sequence order"""
-    #     if self.spatial_sort_indices is None or len(self.spatial_sort_indices) == 0:
-    #         return
-    #     sort_idx = self.spatial_sort_indices
-    #     for key in ['image_regions', 'patch_centers', 'patch_sizes', 'variance_similarities', 'core_features']:
-    #         if key in self.token_info and len(self.token_info[key]) > 0:
-    #             self.token_info[key] = self.token_info[key][sort_idx]
-
 
 # ===== WKV =====
 class WKV(torch.autograd.Function):
@@ -709,10 +700,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
         
         self.token_extractor = SingleLayerTokenExtractor()
         
-        # === Forward fusion layer: PET and CT separate encoders ===
-        # Create separate encoders for PET and CT to better adapt to their respective distribution characteristics
-        # Although shallow features (edges, textures) may be similar, PET and CT differ significantly in intensity distribution, contrast, etc.
-        # Separate encoders can better extract features from each modality, avoiding performance compromises from shared encoders
+
         self.pet_enc1 = nn.Sequential(
             nn.Conv3d(1, init_features, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features),
@@ -725,32 +713,25 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
         )
         
         
-        # === Token extraction module (forward fusion layer) ===
+
         self.pet_token_extractor_fusion = AdaptiveTokenExtraction(init_features, n_embd)
         self.ct_token_extractor_fusion = AdaptiveTokenExtraction(init_features, n_embd)
         
-        # Position Encoding
         self.position_embedding = PositionEmbedding(n_embd)
         
-        # === RWKV fusion processing (forward fusion layer) ===
+
         self.blocks_fusion = nn.ModuleList([
             CAPRWKVBlock(n_embd, n_layer) 
             for _ in range(n_layer)
         ])
-        
-        # === Project global features to multiple scales (using average pooling, similar to HDenseFormer's up1, up2, up3) ===
-        # Original image size feature projection (for adding to encoder layer 1)
-        # Note: fused_features_base is restored from tokens to feature map, minimum patch is 2x2x2
-        # Using 3x3x3 convolution (larger than minimum patch) can cover multiple patches, even with duplication in restoration won't affect mapping
-        # Also 3x3x3 convolution is more sensitive to boundaries, better capturing patch boundary information
+
         self.fusion_proj_1 = nn.Sequential(
             nn.Conv3d(n_embd, init_features, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features),
             nn.ReLU(inplace=True)
         )
         
-        # 1/2 size feature projection (for adding to encoder layer 2)
-        # Note: Using 3x3x3 convolution (larger than minimum patch 2x2x2), can cover multiple patches and capture boundary information
+
         self.fusion_proj_2 = nn.Sequential(
             nn.AvgPool3d(kernel_size=2, stride=2),  # Downsample to 1/2 using average pooling
             nn.Conv3d(n_embd, init_features * 2, kernel_size=3, stride=1, padding=1),
@@ -758,8 +739,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # 1/4 size feature projection (for adding to bottleneck)
-        # Note: Using 3x3x3 convolution (larger than minimum patch 2x2x2), can cover multiple patches and capture boundary information
+
         self.fusion_proj_3 = nn.Sequential(
             nn.AvgPool3d(kernel_size=4, stride=4),  # Downsample to 1/4 using average pooling
             nn.Conv3d(n_embd, init_features * 4, kernel_size=3, stride=1, padding=1),
@@ -767,31 +747,27 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-       
-        # === Feature fusion module: concat then convolve to avoid scale inconsistency ===
-        # Fuse encoder layer 1 features (after concat: PET features + fused global features = init_features*2)
+
         self.fusion_conv_1 = nn.Sequential(
             nn.Conv3d(init_features * 2, init_features, kernel_size=1),
             nn.InstanceNorm3d(init_features),
             nn.ReLU(inplace=True)
         )
         
-        # Fuse encoder layer 2 features (after concat: init_features*2 + init_features*2 = init_features*4)
+
         self.fusion_conv_2 = nn.Sequential(
             nn.Conv3d(init_features * 4, init_features * 2, kernel_size=1),
             nn.InstanceNorm3d(init_features * 2),
             nn.ReLU(inplace=True)
         )
-        
-        # Fuse bottleneck features (after concat: init_features*4 + init_features*4 = init_features*8)
+
         self.fusion_conv_3 = nn.Sequential(
             nn.Conv3d(init_features * 8, init_features * 4, kernel_size=1),
             nn.InstanceNorm3d(init_features * 4),
             nn.ReLU(inplace=True)
         )
         
-        # === UNet Encoder (3 layers: enc1, enc2, bottleneck) ===
-        # Encoder Block 1: Original image size
+
         self.block_1_1 = nn.Sequential(
             nn.Conv3d(init_features, init_features, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features),
@@ -803,8 +779,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         self.pool_1 = nn.MaxPool3d(kernel_size=2, stride=2)  # Downsample to 1/2
-        
-        # Encoder Block 2: 1/2 size
+
         self.block_2_1 = nn.Sequential(
             nn.Conv3d(init_features, init_features * 2, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features * 2),
@@ -817,7 +792,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
         )
         self.pool_2 = nn.MaxPool3d(kernel_size=2, stride=2)  # Downsample to 1/4
         
-        # Bottleneck: 1/4 size
+
         self.bottleneck_1 = nn.Sequential(
             nn.Conv3d(init_features * 2, init_features * 4, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features * 4),
@@ -829,8 +804,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # === UNet Decoder (3-layer decoding) ===
-        # Decoder Block 2: 1/4 -> 1/2
+
         self.upconv_2 = nn.ConvTranspose3d(init_features * 4, init_features * 2, kernel_size=2, stride=2)
         self.decoder_2_1 = nn.Sequential(
             nn.Conv3d(init_features * 4, init_features * 2, kernel_size=3, stride=1, padding=1),
@@ -843,10 +817,9 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # Decoder Block 1: 1/2 -> Original image size
+   
         self.upconv_1 = nn.ConvTranspose3d(init_features * 2, init_features, kernel_size=2, stride=2)
-        # Decoder fusion module: fuse decoder_1 features, skip connection and CT features
-        # After concat: init_features + init_features + init_features = init_features*3 -> init_features*2
+    
         self.decoder_1_1 = nn.Sequential(
             nn.Conv3d(init_features * 3, init_features, kernel_size=3, stride=1, padding=1),
             nn.InstanceNorm3d(init_features),
@@ -858,7 +831,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
             nn.ReLU(inplace=True)
         )
         
-        # === Final output ===
+
         self.final_conv = nn.Conv3d(init_features, num_classes, kernel_size=1, bias=True)
         
         self._initialize_weights()
@@ -886,9 +859,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
     def load_token_info(self, token_info_path: str):
         """Load token information"""
         self.token_extractor.load_token_info(token_info_path)
-        
-        # Clear all possible GPU caches to ensure recreation on model's device later
-        # Avoid device inconsistency between token cache and model on different GPUs
+
         self.token_extractor._cached_regions_tensor = None
         self.token_extractor._cached_device = None
         if hasattr(self.token_extractor, '_cached_patch_centers'):
