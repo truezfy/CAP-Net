@@ -1,0 +1,25 @@
+# CAP-Net Requirements (from 'cap' conda environment)
+
+# Core
+python==3.9.23
+torch==2.8.0
+numpy==2.0.2
+scipy==1.13.1
+
+# Medical Imaging
+torchio==0.20.23
+nibabel==5.3.2
+SimpleITK==2.5.2
+
+# Utilities
+tqdm==4.67.1
+scikit-image==0.24.0
+scikit-learn==1.6.1
+matplotlib==3.9.4
+pillow==11.1.0
+PyYAML==6.0.2
+
+# CUDA (for GPU support)
+nvidia-cuda-runtime-cu12==12.8.90
+nvidia-cudnn-cu12==9.10.2.21
+nvidia-cublas-cu12==12.8.4.1
