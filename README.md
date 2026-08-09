@@ -12,12 +12,12 @@ Fusing complementary information from PET and CT is beneficial for tumor segment
 
 ## Requirements
 
-```
-torch >= 2.0.0
-torchio >= 0.19.0
-nibabel >= 5.0.0
-numpy >= 1.21.0
-scipy >= 1.7.0
+Python 3.9.23, PyTorch 2.8.0, CUDA 12.8 (for GPU support).
+
+Key dependencies: torchio, nibabel, SimpleITK, numpy, scipy, scikit-learn, matplotlib, tqdm, PyYAML.
+
+```bash
+pip install -r requirements.txt
 ```
 
 ## Citation
