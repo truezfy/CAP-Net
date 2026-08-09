@@ -7,11 +7,6 @@ LVS-TAA Token Generator: Local Variance Similarity-based Token Area Allocation
 Direct PET Feature Extraction Token Generator - Optimized Version
 Based on variance similarity for PET feature extraction
 
-Key features:
-1. Uses unfold for batch computation of all patch variances (avoiding triple loops)
-2. Threshold iteration only updates judgment, no need to recalculate all variances
-3. Supports PSMA dataset
-"""
 
 import os
 import sys
@@ -517,10 +512,10 @@ def main():
     parser.add_argument('--dataset', type=str, default='both', choices=['Hecktor', 'AutoPet', 'PSMA', 'both'],
                        help='Dataset to use')
     parser.add_argument('--data_dir', type=str, 
-                       default='/Data3/zfy/MultiModal_VRWKV/data_split_hecktor_resized',
+                       default='',
                        help='Dataset directory')
     parser.add_argument('--output_dir', type=str, 
-                       default='/Data3/zfy/MultiModal_VRWKV/direct_pet_tokens',
+                       default='',
                        help='Output directory for token information')
     parser.add_argument('--split', type=str, default='all', choices=['train', 'val', 'test', 'all'],
                        help='Which split to process')
@@ -537,9 +532,9 @@ def main():
 
     # Dataset configuration
     datasets_config = {
-        'Hecktor': '/Data3/zfy/MultiModal_VRWKV/data_split_hecktor_resized',
-        'AutoPet': '/Data3/zfy/MultiModal_VRWKV/data_split_autopet_resized',
-        'PSMA': '/Data3/zfy/MultiModal_VRWKV/data_split_PSMA_128x128x64'
+        'Hecktor': '',
+        'AutoPet': '',
+        'PSMA': ''
     }
     
     if args.dataset == 'both':
