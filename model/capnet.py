@@ -5,12 +5,6 @@
 CAP-Net: CT-Assisted PET Network for Efficient 3D Tumor Segmentation
 
 Forward Fusion Multi-modal VRWKV Model
-Architecture:
-1. Forward Fusion Layer: PET and CT are fused via RWKV to obtain global features, then projected to multiple scales
-2. UNet Encoder: Each layer receives corresponding global fusion features (addition operation)
-3. UNet Decoder: Standard skip connection structure
-
-Core idea: Fusion-then-Guide, similar to HDenseFormer's forward fusion approach
 """
 
 import torch
@@ -626,24 +620,6 @@ class AdaptiveTokenExtraction(nn.Module):
         """
         Vectorized optimized token extraction: Batch extract token features from feature maps
         
-        Optimization notes:
-        ==========
-        Original implementation (loop method):
-        - Use Python for loop to process each token one by one (N iterations, N=2400+)
-        - Each iteration: compute coordinates -> extract features -> project (3 independent operations)
-        - Problem: Large Python loop overhead, cannot utilize GPU parallel computing
-        - Time: ~4-7 seconds (depending on token count)
-        
-        Optimized implementation (vectorized method):
-        - Batch compute center coordinates for all tokens (1 tensor operation)
-        - Use torch.gather to extract all token features at once (1 GPU operation)
-        - Batch project all tokens (1 matrix multiplication)
-        - Advantage: Fully utilize GPU parallel computing, reduce Python-GPU data transfer
-        - Time: Expected <0.1 seconds (50-100x improvement)
-        
-        Second optimization (2026-03-01):
-        - Use caching mechanism to avoid type conversion on every forward pass
-        - Cache regions_tensor after first conversion, use directly thereafter
         
         Args:
             features: Feature map [B, C, D, H, W] - original image size (shared_enc1 has no downsampling)
@@ -722,15 +698,7 @@ class AdaptiveTokenExtraction(nn.Module):
 
 # ===== ForwardFusionMultiModalVRWKV =====
 class ForwardFusionMultiModalVRWKV(nn.Module):
-    """
-    Forward Fusion Multi-modal VRWKV Model (3-layer UNet, lightweight version)
-    References HDenseFormer's forward fusion approach:
-    - First fuse to get global features via RWKV (similar to transformer part)
-    - Project global features to multiple scales (using average pooling, similar to up1, up2, up3)
-    - Add these global features to each UNet encoder layer (similar to ds0+at3, ds1+at2, x+attnout)
-    - UNet architecture: enc1 -> enc2 -> bottleneck, 3-layer encoder (lighter than standard UNet)
-    """
-    
+
     def __init__(self, n_embd: int = 256, n_layer: int = 16, num_classes: int = 2, 
                  init_features: int = 16):
         super().__init__()
@@ -1145,57 +1113,29 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
         return token_logits
 
 
-def create_forward_fusion_multimodal_vrwkv_model_v7(
+def create_forward_fusion_multimodal_vrwkv_model(
     n_embd: int = 256, 
     n_layer: int = 16, 
     num_classes: int = 2, 
     init_features: int = 16
 ):
-    """Create forward fusion multi-modal VRWKV model v7 (based on v5, CT features fused at multiple decoder levels)"""
-    print(f"Creating ForwardFusionMultiModalVRWKV_v7 model (based on v5, multi-level decoder CT feature fusion):")
+   
     print(f"  Embedding dimension: {n_embd}")
     print(f"  RWKV layers: {n_layer}")
     print(f"  Initial features: {init_features}")
     print(f"  Number of classes: {num_classes}")
-    print(f"  Architecture features:")
-    print(f"    - Based on v5 architecture (separate encoders + CT fine-grained features)")
-    print(f"    - PET and CT use separate encoders (avoid performance compromise from shared encoders)")
-    print(f"    - CT features provide both token-level global information and fine-grained features")
-    print(f"    - CT fine-grained features only added to highest-level decoder decoder_1 (original image size)")
-    print(f"    - Encoder stage only fuses PET features and fused global features, without CT features")
-    print(f"    - Global fused feature projection uses 3x3x3 convolution (larger than minimum patch 2x2x2), can cover multiple patches and capture boundary information")
-    print(f"    - 3-layer UNet encoder (enc1, enc2, bottleneck), lighter than standard 5-layer")
+
     return ForwardFusionMultiModalVRWKV(n_embd, n_layer, num_classes, init_features)
 
 
-def create_forward_fusion_multimodal_vrwkv_model_v8(
-    n_embd: int = 256, 
-    n_layer: int = 16, 
-    num_classes: int = 2, 
-    init_features: int = 16
-):
-    """Create forward fusion multi-modal VRWKV model v8 (based on v7, fusion_proj uses depthwise separable convolution)"""
-    print(f"Creating ForwardFusionMultiModalVRWKV_v8 model (based on v7, depthwise separable convolution optimization):")
-    print(f"  Embedding dimension: {n_embd}")
-    print(f"  RWKV layers: {n_layer}")
-    print(f"  Initial features: {init_features}")
-    print(f"  Number of classes: {num_classes}")
-    print(f"  Architecture features:")
-    print(f"    - Based on v7 architecture (separate encoders + CT fine-grained features)")
-    print(f"    - PET and CT use separate encoders (avoid performance compromise from shared encoders)")
-    print(f"    - CT features provide both token-level global information and fine-grained features")
-    print(f"    - CT fine-grained features only added to highest-level decoder decoder_1 (original image size)")
-    print(f"    - Encoder stage only fuses PET features and fused global features, without CT features")
-    print(f"    - Global fused feature projection uses depthwise separable 3x3x3 convolution (preserves spatial receptive field, significantly reduces parameters and FLOPS)")
-    print(f"    - 3-layer UNet encoder (enc1, enc2, bottleneck), lighter than standard 5-layer")
-    return ForwardFusionMultiModalVRWKV(n_embd, n_layer, num_classes, init_features)
+
 
 
 if __name__ == "__main__":
     # Test model
-    print("=== Testing ForwardFusionMultiModalVRWKV_v7 model ===")
+    print("=== Testing ForwardFusionMultiModalVRWKV model ===")
     
-    model = create_forward_fusion_multimodal_vrwkv_model_v7(
+    model = create_forward_fusion_multimodal_vrwkv_model(
         n_embd=256,
         n_layer=16,
         num_classes=2,
