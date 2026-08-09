@@ -5,7 +5,7 @@
 ## Overview
 
 CAP-Net is a novel CT-assisted PET network for efficient 3D tumor segmentation in PET/CT images.
-![CAP-net](figures/net_final.pdf)
+![CAP-net](figure/net_final.pdf)
 
 ## Abstract
 
