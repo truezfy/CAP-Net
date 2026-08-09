@@ -939,77 +939,70 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
         B, _, D, H, W = pet_tensor.shape
         token_info = self.token_extractor.token_info
         
-        # === Forward fusion layer: PET and CT separate encoders, extract tokens, RWKV fusion ===
+ 
         pet_feat1 = self.pet_enc1(pet_tensor)  # [B, init_features, D, H, W]
         ct_feat1 = self.ct_enc1(ct_tensor)     # [B, init_features, D, H, W] - separate encoder
         
         
         
-        # Extract tokens and process
+ 
         pet_tokens = self.pet_token_extractor_fusion(pet_feat1.detach(), token_info)
         ct_tokens = self.ct_token_extractor_fusion(ct_feat1.detach(), token_info)
         
         pet_tokens = self.position_embedding(pet_tokens, token_info)
         ct_tokens = self.position_embedding(ct_tokens, token_info)
         
-        # RWKV fusion processing
+     
         for block in self.blocks_fusion:
             pet_tokens = block(pet_tokens, ct_tokens, token_info)
-        
-        # Convert RWKV fused tokens to feature map (original image size)
+    
         fused_features_base = self._tokens_to_features(pet_tokens, (B, self.n_embd, D, H, W))
-        
-        # === Project global features to multiple scales (similar to HDenseFormer's up1, up2, up3) ===
-        # Original image size features (for adding to encoder layer 1)
+      
+  
         fusion_feat_1 = self.fusion_proj_1(fused_features_base)  # [B, init_features, D, H, W]
         
-        # 1/2 size features (for adding to encoder layer 2)
+     
         fusion_feat_2 = self.fusion_proj_2(fused_features_base)  # [B, init_features*2, D/2, H/2, W/2]
         
-        # 1/4 size features (for adding to bottleneck)
         fusion_feat_3 = self.fusion_proj_3(fused_features_base)  # [B, init_features*4, D/4, H/4, W/4]
         
-        # === UNet Encoder (3 layers: enc1, enc2, bottleneck) ===
-        # Encoder Block 1: Original image size, use concat to fuse fusion_feat_1
-        # Use PET features as main input (CT indirectly provides information through RWKV fusion)
+      
         ds0 = self.block_1_1(pet_feat1)  # Use PET features as input
         ds0 = self.block_1_2(ds0)
-        # Fuse via concat then convolve to avoid scale inconsistency
+     
         ds0 = torch.cat([ds0, fusion_feat_1], dim=1)  # [B, init_features*2, D, H, W]
         ds0 = self.fusion_conv_1(ds0)  # [B, init_features, D, H, W]
         ds1 = self.pool_1(ds0)  # [B, init_features, D/2, H/2, W/2]
         
-        # Encoder Block 2: 1/2 size, use concat to fuse fusion_feat_2
+       
         ds1 = self.block_2_1(ds1)
         ds1 = self.block_2_2(ds1)
-        # Fuse via concat then convolve
+       
         ds1 = torch.cat([ds1, fusion_feat_2], dim=1)  # [B, init_features*4, D/2, H/2, W/2]
         ds1 = self.fusion_conv_2(ds1)  # [B, init_features*2, D/2, H/2, W/2]
         ds2 = self.pool_2(ds1)  # [B, init_features*2, D/4, H/4, W/4]
         
-        # Bottleneck: 1/4 size, use concat to fuse fusion_feat_3
+     
         x = self.bottleneck_1(ds2)
         x = self.bottleneck_2(x)
-        # Fuse via concat then convolve
+     
         x = torch.cat([x, fusion_feat_3], dim=1)  # [B, init_features*8, D/4, H/4, W/4]
         x = self.fusion_conv_3(x)  # [B, init_features*4, D/4, H/4, W/4]
         
-        # === UNet Decoder (3-layer decoding) ===
-        # Decoder Block 2: 1/4 -> 1/2
+  
         x = self.upconv_2(x)  # [B, init_features*2, D/2, H/2, W/2]
         x = torch.cat([x, ds1], dim=1)  # [B, init_features*4, D/2, H/2, W/2]
         x = self.decoder_2_1(x)  # [B, init_features*2, D/2, H/2, W/2]
         x = self.decoder_2_2(x)  # [B, init_features*2, D/2, H/2, W/2]
         
-        # Decoder Block 1: 1/2 -> Original image size
-        # Add CT features' fine-grained information (original image size)
+   
         x = self.upconv_1(x)  # [B, init_features, D, H, W]
-        # Concat decoder features, skip connection and CT features
+     
         x = torch.cat([x, ds0, ct_feat1], dim=1)  # [B, init_features*3, D, H, W]
         x = self.decoder_1_1(x)  # [B, init_features, D, H, W]
         x = self.decoder_1_2(x)  # [B, init_features, D, H, W]
         
-        # === Final output ===
+  
         logits = self.final_conv(x)
         
         # Decide whether to compute token_logits based on existence of token_info
