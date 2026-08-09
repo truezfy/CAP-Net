@@ -927,10 +927,7 @@ class ForwardFusionMultiModalVRWKV(nn.Module):
     def forward(self, pet_tensor: torch.Tensor, ct_tensor: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward Fusion Multi-modal VRWKV Forward Pass
-        References HDenseFormer's forward fusion approach:
-        1. First fuse to get global features via RWKV (similar to transformer part)
-        2. Project global features to multiple scales (similar to up1, up2, up3)
-        3. Add these global features to each UNet encoder layer (similar to ds0+at3, ds1+at2, ds2+at1, x+attnout)
+
         """
         if self.token_extractor.token_info is None:
             raise ValueError("Please load token info first by calling load_token_info")
