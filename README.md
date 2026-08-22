@@ -24,12 +24,14 @@ pip install -r requirements.txt
 ## Citation
 
 ```bibtex
-@article{ZHANG2026104690,
-  title = {Rethinking Modality Fusion: CT-Assisted PET Network for Efficient 3D Tumor Segmentation},
-  journal = {Information Fusion},
-  pages = {104690},
-  year = {2026},
-  doi = {10.1016/j.inffus.2026.104690},
-  author = {Fengyi Zhang and Yiguang Yang and Fang Chen and Hui Zhang and Hongen Liao}
+@article{ZHANG2027104690,
+title = {Rethinking modality fusion: CT-assisted PET network for efficient 3D tumor segmentation},
+journal = {Information Fusion},
+volume = {138},
+pages = {104690},
+year = {2027},
+issn = {1566-2535},
+doi = {https://doi.org/10.1016/j.inffus.2026.104690},
+url = {https://www.sciencedirect.com/science/article/pii/S156625352600566X}
 }
 ```
